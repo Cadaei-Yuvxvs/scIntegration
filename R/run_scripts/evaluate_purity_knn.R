@@ -6,9 +6,12 @@ message(" Load parameters and packages ")
 
 library(magrittr)
 library(scUtils)
+library(reticulate)
 
 source("R/evaluation_functions.R")
 source("R/annoy_from_seurat_functions.R")
+
+options(future.globals.maxSize = 2 * 1024^3)
 
 # get params-filename from commandline
 command_args<-commandArgs(TRUE)
@@ -19,8 +22,12 @@ parameter_list = jsonlite::read_json(param_file)
 parameter_list = lapply(parameter_list,function(x){if(is.list(x)){return(unlist(x))}else{return(x)}})
 
 # load seurat meta
-seurat_metadata_evaluation <- data.table::fread(parameter_list$seurat_merged_metadata,data.table = F)
-rownames(seurat_metadata_evaluation) = seurat_metadata_evaluation[,"Cell_ID"]
+#seurat_metadata_evaluation <- data.table::fread(parameter_list$seurat_merged_metadata,data.table = F)
+#seurat_metadata_evaluation <- read.csv(parameter_list$seurat_merged_metadata)
+#rownames(seurat_metadata_evaluation) = seurat_metadata_evaluation[,"Cell_ID"]
+seu = readRDS(parameter_list$merged_file)
+seurat_metadata_evaluation = seu@meta.data
+rownames(seurat_metadata_evaluation) = colnames(seu)
 
 # read cell sets
 cells_sets = jsonlite::read_json(paste0(parameter_list$integration_folder_path,parameter_list$detected_cells_filename))

@@ -2,18 +2,21 @@
 ### Load
 ##########
 
+.libPaths( c( .libPaths(), "/home/username/R/x86_64-pc-linux-gnu-library/4.4/") )
+
 # source("R/integration_functions.R")
 # source("R/evaluation_functions.R")
-singularity_path = "~/Documents/r_scvi_015.simg"
+#singularity_path = "/scratch/user/username/scvi_docker_v4-6.sif"
+singularity_path = "/scratch/user/username/scintegration-rf.sif"
 
 # direct output and logs to some files on the local filesystem:
 # where to store temporary json's with params for jobs:
-param_path = "/beegfs/scratch/bruening_scratch/lsteuernagel/slurm/hypoMap_v2_params/"
+param_path = "/scratch/user/username/transcriptomics/slurm/"
 # where to save log files --> use this path in the slurm.sh files!
-log_path = "/beegfs/scratch/bruening_scratch/lsteuernagel/slurm/hypoMap_v2_slurmlogs/"
+log_path = "/scratch/user/username/transcriptomics/slurm/"
 
 # load json file with all other information
-params_integration = jsonlite::read_json("data/parameters_integration_v2_neurons_1.json")
+params_integration = jsonlite::read_json("data/parameters_integration.json")
 # if some fields are lists --> unlist
 params_integration = lapply(params_integration,function(x){if(is.list(x)){return(unlist(x))}else{return(x)}})
 
@@ -83,22 +86,22 @@ for(i in 1:length(cut_levels)){
   param_set$integration_names = integrations_to_evaluate[which(cut_values==cut_levels[i])]
   param_set$integration_res_path = paste0(param_set$integration_folder_path,"integration/")
   param_set$evaluation_file = evaluation_mixingrf_file
-  param_set$seurat_merged_metadata = paste0(param_set$integration_folder_path,param_set$new_name_suffix,"_metadata.txt")
+  param_set$seurat_merged_metadata = paste0(param_set$integration_folder_path,param_set$new_name_suffix,"_metadata.csv")
 
   # make unique id:
   job_id=digest::digest(param_set)
   param_set$job_id = job_id
   # write to JSON as transfer file
   param_file = paste0(param_path,"evaluation_mixing_rf_params_",job_id,".json")
-  writeList_to_JSON(list_with_rows = param_set,filename = param_file)
+  #writeList_to_JSON(list_with_rows = param_set,filename = param_file)
   # execute job
   script_path = "R/run_scripts/evaluate_mixing_rf.R"
   # set sbatch params:
   jobname = paste0("evaluation_mixing_rf","_",job_id)
   outputfile = paste0(log_path,jobname,"_","slurm-%j.out")
   errorfile = paste0(log_path,jobname,"_","slurm-%j.err")
-  output_message = system(paste0("sbatch -J ",jobname," -o ",outputfile," -e ",errorfile," --kill-on-invalid-dep=yes R/run_scripts/run_Rscript_slurm.sh ",singularity_path," ",script_path," ",param_file),intern = TRUE)
-  slurm_id_6_per_cut[i] = stringr::str_remove(output_message,pattern = "Submitted batch job ")
+  #output_message = system(paste0("sbatch -J ",jobname," -o ",outputfile," -e ",errorfile," --kill-on-invalid-dep=yes R/run_scripts/run_Rscript_slurm.sh ",singularity_path," ",script_path," ",param_file),intern = TRUE)
+  #slurm_id_6_per_cut[i] = stringr::str_remove(output_message,pattern = "Submitted batch job ")
 }
 
 
@@ -160,15 +163,15 @@ for(i in 1:length(cut_levels)){
   param_set$job_id = job_id
   # write to JSON as transfer file
   param_file = paste0(param_path,"evaluation_mixing_knn_params_",job_id,".json")
-  writeList_to_JSON(list_with_rows = param_set,filename = param_file)
+  #writeList_to_JSON(list_with_rows = param_set,filename = param_file)
   # execute job
   script_path = "R/run_scripts/evaluate_mixing_knn.R"
   # set sbatch params:
   jobname = paste0("evaluation_mixing_knn","_",job_id)
   outputfile = paste0(log_path,jobname,"_","slurm-%j.out")
   errorfile = paste0(log_path,jobname,"_","slurm-%j.err")
-  output_message = system(paste0("sbatch -J ",jobname," -o ",outputfile," -e ",errorfile," --kill-on-invalid-dep=yes R/run_scripts/run_Rscript_slurm.sh ",singularity_path," ",script_path," ",param_file),intern = TRUE)
-  slurm_id_7_per_cut[i] = stringr::str_remove(output_message,pattern = "Submitted batch job ")
+  #output_message = system(paste0("sbatch -J ",jobname," -o ",outputfile," -e ",errorfile," --kill-on-invalid-dep=yes R/run_scripts/run_Rscript_slurm.sh ",singularity_path," ",script_path," ",param_file),intern = TRUE)
+  #slurm_id_7_per_cut[i] = stringr::str_remove(output_message,pattern = "Submitted batch job ")
 }
 
 
@@ -222,22 +225,22 @@ for(i in 1:length(cut_levels)){
   param_set$integration_names = integrations_to_evaluate[which(cut_values==cut_levels[i])]
   param_set$integration_res_path = paste0(param_set$integration_folder_path,"integration/")
   param_set$evaluation_file = evaluation_purityknn_file
-  param_set$seurat_merged_metadata = paste0(param_set$integration_folder_path,param_set$new_name_suffix,"_metadata.txt")
+  param_set$seurat_merged_metadata = paste0(param_set$integration_folder_path,param_set$new_name_suffix,"_metadata.csv")
 
   # make unique id:
   job_id=digest::digest(param_set)
   param_set$job_id = job_id
   # write to JSON as transfer file
   param_file = paste0(param_path,"evaluation_purity_knn_params_",job_id,".json")
-  writeList_to_JSON(list_with_rows = param_set,filename = param_file)
+  #writeList_to_JSON(list_with_rows = param_set,filename = param_file)
   # execute job
   script_path = "R/run_scripts/evaluate_purity_knn.R"
   # set sbatch params:
   jobname = paste0("evaluation_purity_knn","_",job_id)
   outputfile = paste0(log_path,jobname,"_","slurm-%j.out")
   errorfile = paste0(log_path,jobname,"_","slurm-%j.err")
-  output_message = system(paste0("sbatch -J ",jobname," -o ",outputfile," -e ",errorfile," --kill-on-invalid-dep=yes R/run_scripts/run_Rscript_slurm.sh ",singularity_path," ",script_path," ",param_file),intern = TRUE)
-  slurm_id_8_per_cut[i] = stringr::str_remove(output_message,pattern = "Submitted batch job ")
+  #output_message = system(paste0("sbatch -J ",jobname," -o ",outputfile," -e ",errorfile," --kill-on-invalid-dep=yes R/run_scripts/run_Rscript_slurm.sh ",singularity_path," ",script_path," ",param_file),intern = TRUE)
+  #slurm_id_8_per_cut[i] = stringr::str_remove(output_message,pattern = "Submitted batch job ")
 }
 
 
@@ -264,7 +267,7 @@ if(!file.exists(evaluation_purityasw_file)){
 
 # A: Find which results to evaluate
 # Read all files with integration results
-all_integration_files=list.files(paste0(params_integration$integration_folder_path,"integration/"),recursive = TRUE,pattern = ".txt")
+all_integration_files=list.files(paste0(params_integration$integration_folder_path,"integration/"),recursive = TRUE,pattern = ".h5ad")
 available_integrations= gsub(".txt","",all_integration_files)
 available_integrations = as.character(sapply(available_integrations,function(x){ strsplit(x,split = "/")[[1]][length(strsplit(x,split = "/")[[1]])]}))
 # read file with evaluation results

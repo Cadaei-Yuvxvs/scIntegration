@@ -31,7 +31,8 @@ data.table::fwrite(x = seurat_metadata,file = paste0(parameter_list$integration_
 dummy=matrix(data = as.numeric())
 seurat_merged@assays[["RNA"]]@var.features = character()
 seurat_merged@assays[["RNA"]]@scale.data <- dummy[,-1] # error is okay
-
+#seurat_merged@misc$var_features = character()
+#seurat_merged@misc$scale.data <- dummy[,-1]
 # make file name
 merged_file_name = paste0(parameter_list$integration_folder_path,parameter_list$new_name_suffix)
 

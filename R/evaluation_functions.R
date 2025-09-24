@@ -67,35 +67,33 @@ map_celltype_signatures2 = function(exprMatrix,block_size=10000,aucMaxRank_n,gen
 #' @param seurat_object_metadata metadata only of seuratobject associated with current embedding
 #' @return
 
-read_embedding = function(filename_withpath,seurat_object=NULL,seurat_object_metadata=NULL){
-
-  #get metadata
-  if(!is.null(seurat_object_metadata)){
-    metadata = seurat_object_metadata
-  }else{
-    if(!is.null(seurat_object)){
-      metadata = seurat_object@meta.data
-    }else{
-      stop("Please provide either a dataframe with metadata or a seurat object with metadata that can be exctracted!")
-    }
-  }
+read_embedding = function(filename_withpath){
+  use_python("/usr/bin/python3")
+  sc <- import("scanpy")
+  adata <- sc$read_h5ad(filename_withpath)
+  current_embedding <- adata$obsm[["X_scVI"]]
+  current_embedding <- as.data.frame(current_embedding)
+  colnames(current_embedding) <- paste0("scVI_", 1:ncol(current_embedding))
+  rownames(current_embedding) <- rownames(adata[["obs"]])
   # load
-  current_embedding = data.table::fread(filename_withpath,data.table = F)
+  #current_embedding = data.table::fread(filename_withpath,data.table = F)
+
   # use first col as rownames
-  if(is.character(current_embedding[,1])){
-    rnames = current_embedding[,1]
-    current_embedding = current_embedding[,2:ncol(current_embedding)]
-    rownames(current_embedding)=rnames
+  #if(is.character(current_embedding[,1])){
+  #  rnames = current_embedding[,1]
+  #  current_embedding = current_embedding[,2:ncol(current_embedding)]
+  #  rownames(current_embedding)=rnames
     # reorder to align with rest of object
-    if(any(is.na(match(rownames(metadata),rownames(current_embedding))))){
-      message("Found ",length(rnames)," rows in embedding and ",length(rownames(metadata))," rows in metadata.")
-      stop("Cell names from loaded reduction and new object are not matching exactly. Stopping import.")
-    }
-    current_embedding = current_embedding[match(rownames(metadata),rownames(current_embedding)),]
-  }else{
-    warning("First column of loaded file is not of type character, using rownames of metadata as rownames of added reduction. This can induce bugs if the order changed due to split/merge of the Seurat object!")
-    rownames(current_embedding) = rownames(metadata)
-  }
+  #  if(any(is.na(match(rownames(metadata),rownames(current_embedding))))){
+  #    message("Found ",length(rnames)," rows in embedding and ",length(rownames(metadata))," rows in metadata.")
+  #    stop("Cell names from loaded reduction and new object are not matching exactly. Stopping import.")
+  #  }
+  #  current_embedding = current_embedding[match(rownames(metadata),rownames(current_embedding)),]
+  #}else{
+  #  warning("First column of loaded file is not of type character, using rownames of metadata as rownames of added reduction. This can induce bugs if the order changed due to split/merge of the Seurat object!")
+  #  rownames(current_embedding) = rownames(metadata)
+  #}
+  
   return(current_embedding)
 }
 
@@ -133,7 +131,7 @@ evaluate_purity_knn = function(seurat_object_metadata,integration_names,integrat
     # get current result
     current_name = integration_names[embed_idx]
     current_file = list.files(path = integration_path,full.names = TRUE,recursive = TRUE,pattern = current_name)[1]
-    current_embedding = read_embedding(current_file,seurat_object_metadata=seurat_object_metadata)
+    current_embedding = read_embedding(current_file)
     current_embedding = as.matrix(current_embedding)
 
     # only use cell sets with more than 3 cells detected:
@@ -210,7 +208,7 @@ evaluate_mixing_knn = function(seurat_object_metadata,integration_names,integrat
     # get current result
     current_name = integration_names[embed_idx]
     current_file = list.files(path = integration_path,full.names = TRUE,recursive = TRUE,pattern = current_name)[1]
-    current_embedding = read_embedding(current_file,seurat_object_metadata=seurat_object_metadata)
+    current_embedding = read_embedding(current_file)
     current_embedding = as.matrix(current_embedding)
 
     ## knn based:
@@ -290,7 +288,7 @@ evaluate_mixing_rf = function(seurat_object_metadata,integration_names,integrati
       # get current result
       current_name = integration_names[i] #gsub(".txt","",integration_to_run[i])
       current_file = list.files(path = integration_path,full.names = TRUE,recursive = TRUE,pattern = current_name)[1]
-      current_embedding = read_embedding(current_file,seurat_object_metadata=seurat_object_metadata)
+      current_embedding = read_embedding(current_file)
 
       # set cell names --> assumes that the order of cells in metadata is the same as in embedding!
       if(!is.null(subset_cell_ids)){

@@ -2,10 +2,16 @@
 #SBATCH --ntasks=1
 #SBATCH --time=10:00:00
 #SBATCH --cpus-per-task=8
-#SBATCH --partition=general
+#SBATCH --partition=gpu_cuda
+#SBATCH --gres=gpu:nvidia_a100_80gb_pcie_1g.10gb:1
 #SBATCH --mem=32G
-#SBATCH --qos=normal
+#SBATCH --qos=gpu
 #SBATCH --account=a_account
+
+module load cuda
+
+export APPTAINERENV_CUDA_VISIBLE_DEVICES=$CUDA_VISIBLE_DEVICES
+
 
 # need to get 3 variables from call
 # singularity image
@@ -16,7 +22,7 @@ method_script=$2
 param_file=$3
 
 # Run script
-echo "singularity exec "$singularity_image" python3 -u "$method_script" "$param_file
-srun singularity exec $singularity_image python3 -u $method_script $param_file
+echo "singularity exec --nv "$singularity_image" python3 -u "$method_script" "$param_file
+srun singularity exec --nv $singularity_image python3 -u $method_script $param_file
 
 

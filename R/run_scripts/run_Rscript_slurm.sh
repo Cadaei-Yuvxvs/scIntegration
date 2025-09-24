@@ -1,8 +1,12 @@
-#!/bin/bash
+#!/bin/bash --login
 #SBATCH --ntasks=1
-#SBATCH --time=240:00:00
+#SBATCH --time=10:00:00
 #SBATCH --cpus-per-task=40
-#SBATCH --partition=blade-a
+#SBATCH --mem-per-cpu=6G
+#SBATCH --partition=general
+#SBATCH --qos=normal
+#SBATCH --account=a_account
+
 
 # need to get 3 variables from call
 # singularity image

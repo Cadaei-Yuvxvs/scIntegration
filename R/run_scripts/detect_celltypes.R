@@ -21,10 +21,6 @@ parameter_list = jsonlite::read_json(param_file)
 # if some fields are lists --> unlist
 parameter_list = lapply(parameter_list,function(x){if(is.list(x)){return(unlist(x))}else{return(x)}})
 
-# read features to exclude
-features_exclude_list= jsonlite::read_json(parameter_list$genes_to_exclude_file)
-features_exclude_list = lapply(features_exclude_list,function(x){if(is.list(x)){return(unlist(x))}else{return(x)}})
-
 # read signatures
 signaturelist = jsonlite::read_json(path = parameter_list$celltype_signature_file)
 signaturelist = lapply(signaturelist,function(x){if(is.list(x)){return(unlist(x))}else{return(x)}})
@@ -36,7 +32,7 @@ seurat_merged = readRDS(paste0(parameter_list$merged_file))
 ### Run AUCEll based function
 ##########
 
-auc_mat_celltypes = map_celltype_signatures2(exprMatrix=seurat_merged@assays$RNA@counts,block_size=10000,aucMaxRank_n=parameter_list$auc_max_rank,
+auc_mat_celltypes = map_celltype_signatures2(exprMatrix=seurat_merged@assays$RNA@layers$counts,block_size=10000,aucMaxRank_n=parameter_list$auc_max_rank,
                                              gene_set_list=signaturelist,min_rowSum=10,global_seed =parameter_list$global_seed)
 # save
 data.table::fwrite(data.table::as.data.table(auc_mat_celltypes),file = paste0(parameter_list$auc_backup_file),sep="\t")

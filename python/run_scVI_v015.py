@@ -6,7 +6,7 @@ import sys
 import pandas as pd
 import numpy as np
 import scanpy as sc
-import louvain
+#import louvain
 import igraph
 import os
 import sys
@@ -16,6 +16,11 @@ import scvi
 import gc
 from os import listdir
 from os.path import isfile, join
+
+job_id = os.environ.get('SLURM_JOB_ID', 'default')
+unique_cache_dir = f"/scratch/temp/{job_id}"
+os.makedirs(unique_cache_dir, exist_ok=True)
+sc.settings.cachedir = unique_cache_dir
 
 print(scvi.__version__)
 
@@ -46,23 +51,23 @@ scvi.settings.seed = global_seed
 param_df = pd.read_csv(param_path,sep="\t")
 
 # read RNA assay (RNA assay because scVI needs raw data)
-print("Read anndata")
-adata = sc.read_h5ad(data_filepath_full)
+#print("Read anndata")
+#adata = sc.read_h5ad(data_filepath_full)
 #ensure there are no bytestrings 
-str_df = adata.obs
-str_df = str_df.applymap(lambda x: x.decode() if isinstance(x, bytes) else x)
-str_df = str_df.set_index('Cell_ID',drop=False)
-adata.obs = str_df
+#str_df = adata.obs
+#str_df = str_df.applymap(lambda x: x.decode() if isinstance(x, bytes) else x)
+#str_df = str_df.set_index('Cell_ID',drop=False)
+#adata.obs = str_df
 # for features:
-str_df = adata.var
-str_df = str_df.applymap(lambda x: x.decode() if isinstance(x, bytes) else x)
-str_df = str_df.set_index('features',drop=False)
-adata.var = str_df
+#str_df = adata.var
+#str_df = str_df.applymap(lambda x: x.decode() if isinstance(x, bytes) else x)
+#str_df = str_df.set_index('features',drop=False)
+#adata.var = str_df
 
 # read json into dictionary
 json_file = open(feature_set_file)
-hvg_dict = json.load(json_file)
-hvgs = hvg_dict[hvgs_set_name] # add in hvgs variable
+#hvg_dict = json.load(json_file)
+#hvgs = hvg_dict[hvgs_set_name] # add in hvgs variable
 
 # print("Subset anndata to selected featureset:"+str(hvgs_set_name))
 # feature_set_files = [f for f in listdir(filepath_sets) if isfile(join(filepath_sets, f))]
@@ -72,9 +77,9 @@ hvgs = hvg_dict[hvgs_set_name] # add in hvgs variable
 # hvgs = mydf.iloc[:,0].to_numpy().tolist() # add in hvgs variable
 
 # scVI needs raw data and so we subset X to .raw and then relevant features
-print("Copy raw into .X")
-adata.X = adata.raw.X.copy()
-adata = adata[:, hvgs]
+#print("Copy raw into .X")
+#adata.X = adata.raw.X.copy()
+#adata = adata[:, hvgs]
 
 # clean up
 gc.collect()
@@ -98,39 +103,106 @@ if len(continuous_covariates) == 0:
     continuous_covariates = None
 print("categorical_covariate_keys: "+str(categorical_covariates))
 print("continuous_covariate_keys: "+str(continuous_covariates))
-adata_scvi = adata.copy()
+#adata_scvi = adata.copy()
 # setup for scvi
 # Imporant: I am only using the categorical_covariate_keys to describe the batch variable(s) --> unambigous way to specify 1-many cvovariates as batches
-scvi.model.SCVI.setup_anndata(adata_scvi, categorical_covariate_keys=categorical_covariates,continuous_covariate_keys=continuous_covariates)
+#scvi.model.SCVI.setup_anndata(adata_scvi, categorical_covariate_keys=categorical_covariates,continuous_covariate_keys=continuous_covariates)
+
+
+
+
+
+# Load data
+adata = sc.read_10x_mtx(
+    "/scratch/user/username/transcriptomics/data/",
+    var_names='gene_symbols',
+    cache=False
+)
+
+# Load metadata
+metadata = pd.read_csv("/scratch/user/username/transcriptomics/data/metadata.csv", index_col=0)
+for meta in ["donor_id", "sex", "age", "postmortem_delay", "batch"]:
+  adata.obs[meta] = metadata[meta]
+
+
+# Set up scVI model
+scvi.model.SCVI.setup_anndata(
+    adata,
+    layer=None,
+    batch_key="batch",
+    categorical_covariate_keys=["donor_id", "sex"],
+    continuous_covariate_keys=["age", "postmortem_delay"]
+)
+
+
+
+
 
 # for all parameter combinations
 for index, row in param_df.iterrows():
-    print("Running "+str(index+1)+" of "+str(len(param_df.index))+" scVI runs")
-    # set up VAE
-    vae = scvi.model.SCVI(adata_scvi,
+
+    model = scvi.model.SCVI(adata, 
         n_layers=int(row['n_layers']),
         n_latent=int(row['n_latent']),
         n_hidden=int(row['n_hidden']),
         dropout_rate=float(row['dropout_rate']),
         dispersion = str(row['dispersion']),
         gene_likelihood = str(row['gene_likelihood'])
-        #use_cuda=use_cuda
     )
+    model.train(max_epochs=int(row['max_epochs']), early_stopping = bool(row['early_stopping']), accelerator = "gpu")
 
-    # train
-    vae.train(max_epochs=int(row['max_epochs']), early_stopping = bool(row['early_stopping']), use_gpu = use_cuda)
-    # get result
-    adata_scvi.obsm["X_scVI"] = vae.get_latent_representation()
-    output = pd.DataFrame(adata_scvi.obsm["X_scVI"])
-    output = output.set_index(adata_scvi.obs_names)
-    output2 = output.set_axis(["scVI_" + str(s) for s in output.axes[1].to_list()], axis=1, inplace=False)
+    # Get integrated representation
+    adata.obsm["X_scVI"] = model.get_latent_representation()
+    
+    # Get normalized expression
+    adata.layers["scvi_normalized"] = model.get_normalized_expression(
+        library_size=1e4
+    )
+    
+    # Save results
+    out_str = (results_path + "scVI_" + str(index) + "_" + str(int(row['max_epochs'])) + "_" +
+           str(float(row['dropout_rate'])) + "_" + str(int(row['n_layers'])) + "_" +
+           str(int(row['n_hidden'])) + "_" + str(row['dispersion']) + "_" + str(row['gene_likelihood']) + "_cov" + str(length_cov) +
+           "..scVI.." + str(int(row['n_latent'])) + ".." + hvgs_set_name + "_" + job_id)
+    adata.write(f"{out_str}.h5ad")
+
+    output = pd.DataFrame(adata.obsm["X_scVI"])
+    output = output.set_index(adata.obs_names)
+    output2 = output.set_axis(["scVI_" + str(s) for s in output.axes[1].to_list()], axis=1)
     # save
-    output2.to_csv(results_path+"scVI_"+str(index)+"_"+str(int(row['max_epochs']))+"_"+
-                  str(float(row['dropout_rate']))+"_"+str(int(row['n_layers']))+"_"+
-                  str(int(row['n_hidden']))+"_"+str(row['dispersion'])+"_"+str(row['gene_likelihood'])+"_cov"+str(length_cov)+
-                  "..scVI.."+str(int(row['n_latent']))+".."+hvgs_set_name+"_"+job_id+".txt", sep='\t',index=True)
+    output2.to_csv(f"{out_str}.txt", sep='\t',index=True)
     # clean up
     gc.collect()
+    
+    
+    
+
+    #print("Running "+str(index+1)+" of "+str(len(param_df.index))+" scVI runs")
+    # set up VAE
+    #vae = scvi.model.SCVI(adata_scvi,
+    #    n_layers=int(row['n_layers']),
+    #    n_latent=int(row['n_latent']),
+    #    n_hidden=int(row['n_hidden']),
+    #    dropout_rate=float(row['dropout_rate']),
+    #    dispersion = str(row['dispersion']),
+    #    gene_likelihood = str(row['gene_likelihood'])
+        #use_cuda=use_cuda
+    #)
+
+    # train
+    #vae.train(max_epochs=int(row['max_epochs']), early_stopping = bool(row['early_stopping']), accelerator = "gpu")
+    # get result
+    #adata_scvi.obsm["X_scVI"] = vae.get_latent_representation()
+    #output = pd.DataFrame(adata_scvi.obsm["X_scVI"])
+    #output = output.set_index(adata_scvi.obs_names)
+    #output2 = output.set_axis(["scVI_" + str(s) for s in output.axes[1].to_list()], axis=1)
+    # save
+    #output2.to_csv(results_path+"scVI_"+str(index)+"_"+str(int(row['max_epochs']))+"_"+
+    #              str(float(row['dropout_rate']))+"_"+str(int(row['n_layers']))+"_"+
+    #              str(int(row['n_hidden']))+"_"+str(row['dispersion'])+"_"+str(row['gene_likelihood'])+"_cov"+str(length_cov)+
+    #              "..scVI.."+str(int(row['n_latent']))+".."+hvgs_set_name+"_"+job_id+".txt", sep='\t',index=True)
+    # clean up
+    #gc.collect()
                   
 ## End of for
 print("Finalized scVI runs")

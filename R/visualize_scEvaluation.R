@@ -3,7 +3,7 @@
 ### Define input files
 ##########
 
-params_integration = jsonlite::read_json("data/parameters_integration_v2_3.json")
+params_integration = jsonlite::read_json("data/parameters_integration.json")
 evaluation_folder = paste0(params_integration$integration_folder_path,"evaluation/")
 evaluation_mixingrf_file = paste0(evaluation_folder,"all_mixing_rf.txt")
 evaluation_purityknn_file = paste0(evaluation_folder,"all_purity_knn.txt")
@@ -22,8 +22,8 @@ evaluation_mixingrf = data.table::fread(evaluation_mixingrf_file,data.table = F)
 evaluation_mixingknn = data.table::fread(evaluation_mixingknn_file,data.table = F) %>% dplyr::rename( mixingknn = value)
 evaluation_purityknn = data.table::fread(evaluation_purityknn_file,data.table = F) %>% dplyr::rename( purityknn = value)
 evaluation_purityasw = data.table::fread(evaluation_purityasw_file,data.table = F) #%>% dplyr::rename( asw = value)
-colnames(evaluation_purityasw) =c(colnames(evaluation_purityasw)[2:length(colnames(evaluation_purityasw))],"placeholder")
-evaluation_purityasw$reduction = evaluation_purityasw$placeholder
+colnames(evaluation_purityasw) =c(colnames(evaluation_purityasw)[ncol(evaluation_purityasw)],colnames(evaluation_purityasw)[1:length(colnames(evaluation_purityasw))-1])
+
 ## additional:
 # all_knownLabel_K169_asw = data.table::fread("/beegfs/scratch/bruening_scratch/lsteuernagel/data/hypoMap_v2_integration/evaluation/all_knownLabel_K169_asw.txt",data.table = F)
 # colnames(all_knownLabel_K169_asw) =c("reduction","knownasw_mean_euc","knownasw_mean_cos")
@@ -37,9 +37,10 @@ evaluation_purityasw$reduction = evaluation_purityasw$placeholder
 evaluation_purityknn_mean = evaluation_purityknn %>% dplyr::group_by(reduction) %>% dplyr::summarise(mean_knn_purity = mean(purityknn))
 all_evaluation_results = dplyr::full_join(evaluation_mixingrf,evaluation_mixingknn,by="reduction")
 all_evaluation_results = dplyr::full_join(all_evaluation_results,evaluation_purityknn_mean,by="reduction")
+evaluation_purityasw$reduction = as.character(evaluation_purityasw$reduction)
 all_evaluation_results = dplyr::full_join(all_evaluation_results,evaluation_purityasw[,c("reduction","silhouette_score_euclidean")],by="reduction")
 #all_evaluation_results = dplyr::full_join(all_evaluation_results,all_knownLabel_K169_asw[,c("reduction","knownasw_mean_euc")],by="reduction")
-all_evaluation_results = all_evaluation_results %>% dplyr::select(reduction, mixingrf, mixingknn , mean_knn_purity,asw = silhouette_score_euclidean,label_asw = knownasw_mean_euc)
+all_evaluation_results = all_evaluation_results %>% dplyr::select(reduction, mixingrf, mixingknn , mean_knn_purity,asw = silhouette_score_euclidean)
 
 require(ggplot2)
 ggplot2::ggplot(all_evaluation_results,aes(mixingrf,mixingknn))+geom_point()#+geom_abline(slope=1)
@@ -70,8 +71,8 @@ all_evaluation_results$purity_score =  all_evaluation_results$mean_purity_knn_no
 # add information
 all_evaluation_results$method = stringr::str_extract(all_evaluation_results$reduction,pattern="[a-zA-Z]+_") %>% stringr::str_replace(pattern = "_",replacement = "")
 # pca:
-all_evaluation_results$ndim[all_evaluation_results$method=="PCA"]=all_evaluation_results$reduction[all_evaluation_results$method=="PCA"] %>% stringr::str_extract(pattern="\\.[0-9]+\\.") %>% stringr::str_replace(pattern = "\\.",replacement = "") %>% stringr::str_replace(pattern = "\\.",replacement = "")
-all_evaluation_results$features_ngenes[all_evaluation_results$method=="PCA"]=all_evaluation_results$reduction[all_evaluation_results$method=="PCA"] %>% stringr::str_extract(pattern="[0-9]+\\.[0-9]+") %>% stringr::str_replace(pattern = "[0-9]+\\.",replacement = "") #%>% stringr::str_replace(pattern = "\\.",replacement = "")
+#all_evaluation_results$ndim[all_evaluation_results$method=="PCA"]=all_evaluation_results$reduction[all_evaluation_results$method=="PCA"] %>% stringr::str_extract(pattern="\\.[0-9]+\\.") %>% stringr::str_replace(pattern = "\\.",replacement = "") %>% stringr::str_replace(pattern = "\\.",replacement = "")
+#all_evaluation_results$features_ngenes[all_evaluation_results$method=="PCA"]=all_evaluation_results$reduction[all_evaluation_results$method=="PCA"] %>% stringr::str_extract(pattern="[0-9]+\\.[0-9]+") %>% stringr::str_replace(pattern = "[0-9]+\\.",replacement = "") #%>% stringr::str_replace(pattern = "\\.",replacement = "")
 # scvi
 all_evaluation_results$ndim[all_evaluation_results$method=="scVI"]=all_evaluation_results$reduction[all_evaluation_results$method=="scVI"] %>% stringr::str_extract(pattern="\\.\\..[0-9]+\\.\\.") %>% stringr::str_replace(pattern = "\\.\\.",replacement = "") %>% stringr::str_replace(pattern = "\\.\\.",replacement = "")
 all_evaluation_results$features_ngenes[all_evaluation_results$method=="scVI"] = stringr::str_extract(all_evaluation_results$reduction[all_evaluation_results$method=="scVI"],pattern="features\\.[0-9]+") %>% stringr::str_replace(pattern = "features\\.",replacement = "") %>% as.numeric()
@@ -88,93 +89,94 @@ all_evaluation_results$dropout_rate = all_evaluation_results$scvi_params %>% str
 ### Visualize
 ##########
 
-colnames(all_evaluation_results)
+
+base.dir <- "/scratch/user/username/transcriptomics/plots/"
 
 require(ggplot2)
 ggplot2::ggplot(all_evaluation_results,aes(mixing_score,purity_score,color=method))+geom_point()#+geom_abline(slope=1)
+ggsave(paste0(base.dir, "mixing-score_purity-score.png"), last_plot(), height=10, width=12)
 
 ggplot2::ggplot(all_evaluation_results[all_evaluation_results$method=="scVI",],aes(mean_knn_purity,asw,color=as.numeric(mixing_score)))+geom_point()#+geom_abline(slope=1)
+ggsave(paste0(base.dir, "mean-knn-purity_mixing_score_SCVI.png"), last_plot(), height=10, width=12)
+
 ggplot2::ggplot(all_evaluation_results[all_evaluation_results$method=="scVI",],aes(mixingknn,asw,color=as.numeric(mean_knn_purity)))+geom_point()#+geom_abline(slope=1)
+ggsave(paste0(base.dir, "mixing=knn-asw_SCVI.png"), last_plot(), height=10, width=12)
 
-
-plot_df = all_evaluation_results[all_evaluation_results$method=="scVI" & all_evaluation_results$ndim %in% c("110","65","85"),]
-plot_df$ndim= factor(plot_df$ndim,levels = c("65","85","110"))
-plot_df$max_epochs= factor(plot_df$max_epochs,levels = c("50","100","150","200","300","400"))
-plot_df$dropout_rate= factor(plot_df$dropout_rate,levels = c("0.01","0.05","0.1"))
+plot_df = all_evaluation_results[all_evaluation_results$method=="scVI",]
+plot_df$ndim= factor(plot_df$ndim,levels = sort(unique(plot_df$ndim)))
+plot_df$max_epochs= factor(plot_df$max_epochs,levels = sort(unique(plot_df$max_epochs)))
+plot_df$dropout_rate= factor(plot_df$dropout_rate,levels = sort(unique(plot_df$dropout_rate)))
 plot_df$features_ngenes= factor(plot_df$features_ngenes,levels = as.character(sort(as.numeric(unique(plot_df$features_ngenes)))))
 
 #### asw
 
 ## plot ndim
-p_asw_ndim = ggplot(plot_df, aes(x=ndim, y=asw)) +
+p_asw_ndim = ggplot(plot_df, aes(x=ndim, y=asw_norm)) +
   geom_boxplot(aes(fill=nlayers)) +
   geom_point(position=position_dodge(width=0.75),aes(group=nlayers))
 
 ## plot epochs
-p_asw_epochs = ggplot(plot_df, aes(x=max_epochs, y=asw)) +
+p_asw_epochs = ggplot(plot_df, aes(x=max_epochs, y=asw_norm)) +
   geom_boxplot(aes(fill=nlayers)) +
   geom_point(position=position_dodge(width=0.75),aes(group=nlayers))
 
 ## plot dropout_rate
-p_asw_dropout = ggplot(plot_df, aes(x=dropout_rate, y=asw)) +
+p_asw_dropout = ggplot(plot_df, aes(x=dropout_rate, y=asw_norm)) +
   geom_boxplot(aes(fill=nlayers)) +
   geom_point(position=position_dodge(width=0.75),aes(group=nlayers))
 
 ## plot features_ngenes
-p_asw_nfeatures = ggplot(plot_df, aes(x=features_ngenes, y=asw)) +
+p_asw_nfeatures = ggplot(plot_df, aes(x=features_ngenes, y=asw_norm)) +
   geom_boxplot(aes(fill=nlayers)) +
   geom_point(position=position_dodge(width=0.75),aes(group=nlayers))
 
 cowplot::plot_grid(p_asw_ndim,p_asw_epochs,p_asw_dropout,p_asw_nfeatures)+ggtitle("ASW")
 
-#### mean_knn_purity
+#### purity score
 
 ## plot ndim
-p_mean_knn_purity_ndim = ggplot(plot_df, aes(x=ndim, y=mean_knn_purity)) +
+p_mean_knn_purity_ndim = ggplot(plot_df, aes(x=ndim, y=purity_score)) +
   geom_boxplot(aes(fill=nlayers)) +
   geom_point(position=position_dodge(width=0.75),aes(group=nlayers))
 
 ## plot epochs
-p_mean_knn_purity_epochs = ggplot(plot_df, aes(x=max_epochs, y=mean_knn_purity)) +
+p_mean_knn_purity_epochs = ggplot(plot_df, aes(x=max_epochs, y=purity_score)) +
   geom_boxplot(aes(fill=nlayers)) +
   geom_point(position=position_dodge(width=0.75),aes(group=nlayers))
 
 ## plot dropout_rate
-p_mean_knn_purity_dropout = ggplot(plot_df, aes(x=dropout_rate, y=mean_knn_purity)) +
+p_mean_knn_purity_dropout = ggplot(plot_df, aes(x=dropout_rate, y=purity_score)) +
   geom_boxplot(aes(fill=nlayers)) +
   geom_point(position=position_dodge(width=0.75),aes(group=nlayers))
 
 ## plot features_ngenes
-p_mean_knn_purity_nfeatures = ggplot(plot_df, aes(x=features_ngenes, y=mean_knn_purity)) +
+p_mean_knn_purity_nfeatures = ggplot(plot_df, aes(x=features_ngenes, y=purity_score)) +
   geom_boxplot(aes(fill=nlayers)) +
   geom_point(position=position_dodge(width=0.75),aes(group=nlayers))
 
-#### mixingknn
+#### mixing score
 
 ## plot ndim
-p_mixingknn_ndim = ggplot(plot_df, aes(x=ndim, y=mixingknn)) +
+p_mixingknn_ndim = ggplot(plot_df, aes(x=ndim, y=mixing_score)) +
   geom_boxplot(aes(fill=nlayers)) +
   geom_point(position=position_dodge(width=0.75),aes(group=nlayers))
 
 ## plot epochs
-p_mixingknn_epochs = ggplot(plot_df, aes(x=max_epochs, y=mixingknn)) +
+p_mixingknn_epochs = ggplot(plot_df, aes(x=max_epochs, y=mixing_score)) +
   geom_boxplot(aes(fill=nlayers)) +
   geom_point(position=position_dodge(width=0.75),aes(group=nlayers))
 
 ## plot dropout_rate
-p_mixingknn_dropout = ggplot(plot_df, aes(x=dropout_rate, y=mixingknn)) +
+p_mixingknn_dropout = ggplot(plot_df, aes(x=dropout_rate, y=mixing_score)) +
   geom_boxplot(aes(fill=nlayers)) +
   geom_point(position=position_dodge(width=0.75),aes(group=nlayers))
 
 ## plot features_ngenes
-p_mixingknn_nfeatures = ggplot(plot_df, aes(x=features_ngenes, y=mixingknn)) +
+p_mixingknn_nfeatures = ggplot(plot_df, aes(x=features_ngenes, y=mixing_score)) +
   geom_boxplot(aes(fill=nlayers)) +
   geom_point(position=position_dodge(width=0.75),aes(group=nlayers))
 
-# ## plot features_ngenes
-# p_mixingknn_nlayers = ggplot(plot_df, aes(x=nlayers, y=mixingknn)) +
-#   geom_boxplot(aes(fill=nlayers)) +
-#   geom_point(position=position_dodge(width=0.75),aes(group=nlayers))
+cowplot::plot_grid(p_mixingknn_epochs, p_mixingknn_nfeatures)
 
 #### mixingrf
 
